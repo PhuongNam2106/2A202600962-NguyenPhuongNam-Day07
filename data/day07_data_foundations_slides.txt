@@ -1,0 +1,1017 @@
+# Day07 Data Foundations Slides
+Source: D:\AI Invidual Tutor\slides\07-day07-data-foundations-embedding-vector-store.pdf
+Pages: 70
+
+## Slide 1
+Data Foundations
+AICB-P1 · Ngày 7 · Embedding & Vector Store
+Tên Giảng Viên
+VinUniversity · Phase 1 · Tuần 1 · 2026
+
+## Slide 2
+?
+HÃY SUY NGHĨ...
+“Agent trả lời sai vì model yếu, hay vì
+nó không có đúng dữ liệu để suy luận?”
+Giữ câu hỏi này trong đầu khi học bài hôm nay
+
+## Slide 3
+Nội Dung Bài Học
+1. Data strategy cho AI product
+2. Agent memory architecture
+3. Embeddings
+4. Vector store
+5. Kết nối agent với data
+6. Chunking & retrieval basics
+7. Lab 7 + deliverable
+8. Preview Day 08
+Giảng viên (VinUni) AICB · Ngày 7 Tuần 1 1 / 60
+
+## Slide 4
+Mục Tiêu Ngày 7
+■ Phân biệt được knowledge data, operational data, contextual data
+■ Hiểu embedding là lớp biểu diễn nghĩa, không chỉ là một API call
+■ Hiểu vector store lưu gì, tìm gì, và lọc bằng metadata ra sao
+■ Mô tả được pipeline Document → Chunk → Embed → Store → Query → Inject
+■ Build được một mini retrieval integration để nối agent với dữ liệu riêng
+Giảng viên (VinUni) AICB · Ngày 7 Tuần 1 2 / 60
+
+## Slide 5
+Deliverable Cuối Ngày
+Data inventory + chunking / embedding script + vector store index + semantic search
+demo + retrieval-enabled answer function
+■ 1 bộ dữ liệu mẫu đã được chunk và index
+■ 1 script truy vấn semantic search có trả kết quả liên quan
+■ 1 hàm trả lời sử dụng context retrieve được thay vì hỏi LLM “chay”
+Giảng viên (VinUni) AICB · Ngày 7 Tuần 1 3 / 60
+
+## Slide 6
+01
+Data Strategy Cho Sản Phẩm AI
+Không phải dữ liệu nào cũng nên đưa vào agent; chọn đúng dữ
+liệu quan trọng hơn nạp thật nhiều
+
+## Slide 7
+Vì Sao Day 07 Quan Trọng Với AI Product?
+% / $B
+AI use AI use
+55%
+78%
+GenAI GenAI
+33%
+71%
+2023 2024
+Based on Stanford AI Index 2025 economy chapter.
+■ AI adoption đã tăng rất nhanh.
+■ Khi tổ chức dùng AI nhiều hơn,
+câu hỏi chuyển từ “dùng model
+nào” sang “agent được phép
+biết gì”.
+■ Nếu dữ liệu sai, cũ, bẩn, hoặc
+không truy được đúng lúc,
+output sẽ yếu dù model mạnh.
+Lưu ý: Thông điệp mở bài: data quality và retrieval quality thường quyết định
+trải nghiệm thật hơn là đổi sang model đắt hơn.
+Giảng viên (VinUni) AICB · Ngày 7 Tuần 1 4 / 60
+
+## Slide 8
+Garbage In, Garbage Out — Tại Sao Data Quyết Định Output
+Dữ liệu bẩn / thiếu
+■ PDF scan lỗi OCR
+■ Policy cũ 2 năm chưa cập nhật
+■ Chunk cắt giữa câu
+■ Không có metadata
+Kết quả: Agent hallucinate, trả lời sai,
+user mất niềm tin.
+Dữ liệu sạch / đầy đủ
+■ T ext đã chuẩn hóa, metadata đầy
+đủ
+■ Nguồn rõ ràng, có version
+■ Chunk theo section hợp lý
+■ Filter theo category + freshness
+Kết quả: Retrieve đúng, answer
+grounded, có trích nguồn.
+Lưu ý: Đổi model đắt hơn không sửa được data bẩn. Hãy sửa data trước.
+Giảng viên (VinUni) AICB · Ngày 7 Tuần 1 5 / 60
+
+## Slide 9
+3 Loại Data Agent Cần
+Knowledge Data
+Tài liệu, policy, SOP ,
+FAQ, manual, hợp đồng,
+bài viết nội bộ.
+Operational Data
+Database, trạng thái
+đơn hàng, ticket, CRM
+records, logs, transac-
+tions.
+Contextual Data
+Session history, user
+profile, preferences,
+recent actions, channel
+context.
+Knowledge data phù hợp với retrieval; operational data thường cần query có kiểm
+soát; contextual data nên được inject ngắn và đúng lúc.
+Giảng viên (VinUni) AICB · Ngày 7 Tuần 1 6 / 60
+
+## Slide 10
+Knowledge Data — Chi Tiết
+Đặc điểm
+■ Ít thay đổi (static hoặc versioned)
+■ Dạng text dài: tài liệu, hướng dẫn, hợp
+đồng
+■ Cần chunk + embed để agent truy xuất
+■ Nguồn sự thật chính cho retrieval
+Ví dụ thực tế
+■ FAQ / SOP nội bộ công ty
+■ Chính sách bảo hành, đổi trả
+■ Tài liệu kỹ thuật sản phẩm
+■ Legal contracts, compliance docs
+Retrieval fit: Rất cao — đây là kiểu
+data lý tưởng cho vector store.
+Giảng viên (VinUni) AICB · Ngày 7 Tuần 1 7 / 60
+
+## Slide 11
+Operational Data — Chi Tiết
+Đặc điểm
+■ Thay đổi liên tục (real-time hoặc near
+real-time)
+■ Dạng structured: SQL rows, JSON, logs
+■ Thường truy bằng API / SQL, không
+embed
+■ Cần access control chặt chẽ
+Ví dụ thực tế
+■ Trạng thái đơn hàng, tracking
+■ CRM records, ticket history
+■ Server logs, transaction records
+■ Inventory levels, pricing
+Retrieval fit: Thấp — dùng function
+calling / SQL query thay vì semantic
+search.
+Giảng viên (VinUni) AICB · Ngày 7 Tuần 1 8 / 60
+
+## Slide 12
+Contextual Data — Chi Tiết
+Đặc điểm
+■ Gắn liền với session / user hiện tại
+■ Thường ngắn gọn, inject trực tiếp vào
+prompt
+■ Có thể đến từ profile store hoặc session
+state
+■ Giúp agent cá nhân hóa câu trả lời
+Ví dụ thực tế
+■ User profile: tên, ngôn ngữ, vai trò
+■ Lịch sử hội thoại gần nhất
+■ Giỏ hàng hiện tại, trang đang xem
+■ Kênh liên hệ (chat, email, phone)
+Retrieval fit: Trung bình — inject trực
+tiếp hoặc lookup đơn giản, ít khi cần
+semantic search.
+Giảng viên (VinUni) AICB · Ngày 7 Tuần 1 9 / 60
+
+## Slide 13
+Data Quality Pyramid
+Raw - PDF lộn xộn, HTML bẩn, OCR lỗi
+Cleaned - bỏ nhiễu, chuẩn hóa text, metadata cơ bản
+Structured - chunk, section, source, timestamps
+Enriched - tags, owner, access, quality label
+Lưu ý: Sai lầm phổ biến: index ngay dữ liệu raw rồi kỳ vọng retrieval sẽ tự chữa mọi
+vấn đề.
+Giảng viên (VinUni) AICB · Ngày 7 Tuần 1 10 / 60
+
+## Slide 14
+Ví Dụ: Data Quality Ảnh Hưởng Retrieval Như Thế Nào?
+Trước khi clean
+Query: “thời hạn đổi trả”
+Top-1 retrieved:
+“...trang 3... header lặp... \n\n mục lục... 30
+ngày... xem thêm trang 7...”
+Answer: Hallucinate vì context quá nhiễu,
+agent lấy thông tin sai.
+Sau khi clean + chunk
+Query: “thời hạn đổi trả”
+Top-1 retrieved:
+“Khách hàng có 30 ngày kể từ ngày nhận
+hàng để yêu cầu đổi trả. Sản phẩm phải còn
+nguyên seal.”
+Answer: Chính xác, grounded, có trích
+nguồn.
+Cùng một model, cùng một query — chỉ khác data quality đã tạo ra kết quả hoàn toàn khác.
+Giảng viên (VinUni) AICB · Ngày 7 Tuần 1 11 / 60
+
+## Slide 15
+Data Ownership Và Governance
+□✓ Ai sở hữu dữ liệu? team nào chịu trách nhiệm cập nhật?
+□✓ Ai được phép truy cập? dữ liệu nào cần ACL, dữ liệu nào public nội bộ?
+□✓ Data freshness bao lâu phải re-index?
+□✓ PII / sensitive fields có cần mask trước khi embed không?
+□ Không index mọi thứ theo kiểu “cứ nạp hết vào vector DB đã”.
+Giảng viên (VinUni) AICB · Ngày 7 Tuần 1 12 / 60
+
+## Slide 16
+PII Masking Trước Khi Embed
+Loại PII Ví dụ Kỹ thuật mask Mức rủi ro
+Tên cá nhân “Nguyễn Văn A” Thay bằng [PERSON] Trung bình
+Số điện thoại “0912-xxx-xxx” Regex replace Cao
+Email “user@email.com” Hash hoặc remove Cao
+CMND / CCCD “012345678901” Xóa hoàn toàn Rất cao
+Địa chỉ “123 Lê Lợi, Q.1” Generalize “Q.1,
+HCM”
+Trung bình
+Mask trước khi embed — không bao giờ lưu raw PII trong vector store
+Giảng viên (VinUni) AICB · Ngày 7 Tuần 1 13 / 60
+
+## Slide 17
+02
+Agent Memory Architecture
+Memory không chỉ là lưu nhiều hơn; nó là quyết định xem agent
+được nhớ gì, quên gì, và truy gì khi cần
+
+## Slide 18
+Short-term Memory vs Long-term Memory
+Short-term Memory
+■ Nằm trong context window
+■ Giữ lịch sử gần đây và task hiện tại
+■ Rẻ để dùng, nhưng dễ đầy token
+■ Phù hợp cho session logic ngắn
+Long-term Memory
+■ Nằm ngoài context window
+■ Thường là vector store, DB, profile
+store
+■ Phải truy xuất khi cần
+■ Phù hợp cho tri thức tích lũy và
+user history chọn lọc
+Context window không phải là vector store. Agent chỉ “nhớ dài hạn” khi có cơ chế
+truy xuất hoặc lưu trữ bên ngoài.
+Giảng viên (VinUni) AICB · Ngày 7 Tuần 1 14 / 60
+
+## Slide 19
+Memory Lifecycle
+Capture Filter Store Retrieve
+Sự kiện nào
+đáng lưu?
+PII? quality?
+relevance?
+vector / DB
+/ profile
+chỉ truy khi có
+ích cho câu
+hỏi hiện tại
+Lưu ý: Memory tốt là memory có chính sách . Lưu tất cả thường làm tăng chi phí,
+nhiễu, và rủi ro quyền riêng tư.
+Giảng viên (VinUni) AICB · Ngày 7 Tuần 1 15 / 60
+
+## Slide 20
+Cái Gì Không Nên Gọi Là Memory?
+■ Một prompt dài hơn không tự biến thành memory.
+■ Một file PDF upload một lần không phải memory nếu agent không truy được lại có chủ đích.
+■ T oàn bộ chat history không phải lúc nào cũng đáng inject.
+■ “Lưu cho chắc” thường tạo ra context nhiễu hơn là context hữu ích.
+Memory là data + policy + retrieval . Thiếu một trong ba thứ đó thì hệ thống khó ổn định.
+Giảng viên (VinUni) AICB · Ngày 7 Tuần 1 16 / 60
+
+## Slide 21
+Context Window Budget — Phân Bổ Token
+System
+Prompt
+Retrieved
+Context
+Conversation
+History
+Generation
+Budget
+∼15% ∼35% ∼25% ∼25%
+■ System prompt: instructions, persona, guardrails — cố định mỗi request
+■ Retrieved context: top-k chunks inject vào — chiếm nhiều token nhất
+■ Conversation history: các turn gần nhất — cắt bớt khi dài
+■ Generation budget: token dành cho output — quá ít sẽ bị cắt giữa câu
+Lưu ý: Nếu retrieved context chiếm quá nhiều, agent sẽ không đủ token để trả lời
+tốt. Luôn budget trước khi inject .
+Giảng viên (VinUni) AICB · Ngày 7 Tuần 1 17 / 60
+
+## Slide 22
+03
+Embeddings
+Embedding biến ngôn ngữ thành không gian toán học để máy có
+thể so sánh nghĩa thay vì chỉ so chữ
+
+## Slide 23
+Embedding Là Gì?
+hoàn tiền / refund
+vận chuyển / shipping
+trả hàng
+Minh họa trực
+quan: câu có nghĩa gần nhau sẽ ở gần nhau hơn trong vector
+space.
+■ T ext được biến thành vector
+nhiều chiều.
+■ Từ đó, máy có thể đo độ gần
+về nghĩa.
+■ Đây là nền tảng cho semantic
+search, clustering, dedup,
+recommendation.
+Giảng viên (VinUni) AICB · Ngày 7 Tuần 1 18 / 60
+
+## Slide 24
+Cosine Similarity — Đo Độ Gần Về Nghĩa
+⃗A
+⃗B
+θ
+cosine_sim(⃗A, ⃗B) =
+⃗A · ⃗B
+∥⃗A∥ · ∥⃗B∥
+■ 1.0 = hoàn toàn cùng hướng (cùng nghĩa)
+■ 0.0 = vuông góc (không liên quan)
+■ –1.0 = ngược hướng (nghĩa đối lập)
+■ Không phụ thuộc vào độ dài vector
+Hầu hết vector DB dùng cosine similarity
+làm metric mặc định cho semantic search.
+Giảng viên (VinUni) AICB · Ngày 7 Tuần 1 19 / 60
+
+## Slide 25
+Embedding Dùng Để Làm Gì Trong AI Product?
+■ Semantic search: tìm đoạn liên quan
+dù không trùng keyword
+■ Clustering: gom nội dung gần nghĩa
+■ Dedup: phát hiện đoạn tương tự
+nhau
+■ Recommendation: tìm item gần
+hành vi / intent
+Sai lầm phổ biến
+Embedding không tự tạo ra “sự thật”.
+Nếu text nguồn sai, thiếu, hoặc chunk
+xấu thì retrieval vẫn tệ.
+Giảng viên (VinUni) AICB · Ngày 7 Tuần 1 20 / 60
+
+## Slide 26
+Benchmark Framing: Quality, Speed, Size
+Tốc độ
+Điểm benchmark
+Fast / low-cost
+Balanced
+High quality
+Illustrative redraw based on the MTEB speed benchmark: quality,
+throughput, and embedding size are trade-offs.
+■ Không có model embedding
+“tốt nhất” cho mọi use case.
+■ Chọn model theo quality,
+latency, storage, language
+coverage.
+■ Với product thực tế, một model
+cân bằng thường tốt hơn
+model mạnh nhất nhưng chậm
+và đắt.
+Giảng viên (VinUni) AICB · Ngày 7 Tuần 1 21 / 60
+
+## Slide 27
+Các Embedding Model Phổ Biến (2025–2026)
+Model Dims Max tokens Provider Ghi chú
+text-embedding-3-small 1536 8191 OpenAI Rẻ, nhanh, baseline
+tốt
+text-embedding-3-large 3072 8191 OpenAI Quality cao hơn
+voyage-3 1024 32000 Voyage AI Code & multilingual
+mạnh
+Cohere embed-v4 1024 512 Cohere Multilingual, search-
+tuned
+bge-m3 1024 8192 BAAI (open) Open-source,
+MTEB top tier
+Chọn model theo use case, không chỉ theo MTEB score
+Giảng viên (VinUni) AICB · Ngày 7 Tuần 1 22 / 60
+
+## Slide 28
+Embeddings — Python Example
+from openai import OpenAI
+client = OpenAI()
+resp = client.embeddings.create(
+model="text-embedding-3-small",
+input=[
+"Chinh sach hoan tien", # Chính sách hoàn tiền
+"Quy dinh doi tra" # Quy định đổi trả
+]
+)
+print(len(resp.data[0].embedding))
+Giảng viên (VinUni) AICB · Ngày 7 Tuần 1 23 / 60
+
+## Slide 29
+Embedding Dưới Hood — Không Chỉ Là API Call
+Input
+Text Tokenize Transformer
+Layers Pooling Output
+Vector
+“Chính sách
+đổi trả” subword tokens
+self-attention
+captures
+meaning
+mean /
+CLS token
+[0.012, –
+0.87, ...]
+■ Tokenizer: chia text thành subword units (BPE / SentencePiece)
+■ Transformer layers: self-attention giúp mỗi token “nhìn” toàn bộ context
+■ Pooling: gom tất cả token representations thành 1 vector duy nhất
+■ Training: contrastive learning — câu giống nhau gần, câu khác nhau xa
+Giảng viên (VinUni) AICB · Ngày 7 Tuần 1 24 / 60
+
+## Slide 30
+04
+Vector Store
+Vector store không chỉ lưu vector; nó lưu cả nguồn, metadata, và
+khả năng lọc để retrieval có ngữ cảnh đúng
+
+## Slide 31
+Vector Store Lưu Những Gì?
+Original
+chunk
+Embedding
+vector Metadata Search
+results
+text gốc để inject
+lại vào prompt
+phục vụ se-
+mantic similarity
+source, owner,
+date, ACL, section
+top-k chunks +
+scores + filters
+Giảng viên (VinUni) AICB · Ngày 7 Tuần 1 25 / 60
+
+## Slide 32
+Metadata Quan Trọng Không Kém Similarity
+Trường metadata Ví dụ Tác dụng
+Source / file name refund-policy-v3.pdf truy vết và hiển thị nguồn
+Category finance, support, legal lọc đúng domain trước khi
+search
+Time / freshness 2026-03-01 tránh dùng nội dung cũ
+Access level public-internal,
+restricted
+giới hạn truy cập
+Section / chunk id returns.section.4 debug và cite chính xác hơn
+Retrieval tốt cần semantic similarity kết hợp metadata filtering
+Giảng viên (VinUni) AICB · Ngày 7 Tuần 1 26 / 60
+
+## Slide 33
+Top-k, Score Threshold, Filter
+■ Top-k: lấy quá ít thì thiếu context, lấy quá nhiều thì nhiễu.
+■ Score threshold: giúp bỏ các chunk liên quan yếu.
+■ Attribute filter: lọc theo region, team, thời gian, loại tài liệu.
+■ Hybrid thinking: semantic similarity tốt, nhưng nhiều bài toán vẫn cần keyword / metadata
+song song.
+Retrieval tốt hiếm khi đến từ “đổi model” trước tiên; thường đến từ chunk đúng + metadata
+đủ + filter hợp lý .
+Giảng viên (VinUni) AICB · Ngày 7 Tuần 1 27 / 60
+
+## Slide 34
+Vector Database Landscape
+DB Hosting Language Filtering Scale Best for
+Chroma Local Python Basic Small Prototype, học
+tập
+Pinecone Cloud Any Tốt Large Production SaaS
+Weaviate Hybrid Any Tốt Large Hybrid search
+Qdrant Hybrid Rust Rất tốt Large Filtering phức tạp
+pgvector DB addon SQL SQL where Medium T eam đã dùng
+Postgres
+FAISS Local lib C++/Py Không Any Research, bench-
+mark
+Chọn DB theo giai đoạn sản phẩm và yêu cầu vận hành
+Giảng viên (VinUni) AICB · Ngày 7 Tuần 1 28 / 60
+
+## Slide 35
+Chroma — Local Vector Store Example
+import chromadb
+client = chromadb.Client()
+collection = client.create_collection( "policies")
+collection.add(
+ids=["p1"],
+documents=["Khach hang co 30 ngay de doi tra san pham."],
+# «Khách hàng có 30 ngày để đổi trả sản phẩm.»
+metadatas=[{"category": "support", "lang": "vi"}],
+)
+Giảng viên (VinUni) AICB · Ngày 7 Tuần 1 29 / 60
+
+## Slide 36
+05
+Kết Nối Agent Với Data
+Retrieval pipeline là chiếc cầu nối giữa dữ liệu riêng và hành vi
+của agent
+
+## Slide 37
+Retrieval Pipeline Chuẩn
+Document Chunk Embed Store Query Inject
+PDF , docs, HTML chia theo
+section / token vector hóa index + metadata semantic search prompt grounded
+Pipeline redraw
+based on OpenAI Retrieval / File Search guides.
+Giảng viên (VinUni) AICB · Ngày 7 Tuần 1 30 / 60
+
+## Slide 38
+Chunking: Quá To Hay Quá Nhỏ Đều Trả Giá
+Chunk quá to
+Dính nhiều chủ đề vào
+cùng một vector, re-
+trieve trúng nhưng in-
+ject rất nhiễu.
+Chunk hợp lý
+Một ý / một section
+tương đối trọn vẹn, có
+overlap vừa đủ để giữ
+nghĩa.
+Chunk quá nhỏ
+Mất ngữ cảnh, retrieve
+nhiều mảnh rời rạc, khó
+tổng hợp thành câu trả
+lời tốt.
+Bắt đầu đơn giản với chunk theo section / heading, rồi tối ưu sau bằng eval thay vì
+đoán cảm tính.
+Giảng viên (VinUni) AICB · Ngày 7 Tuần 1 31 / 60
+
+## Slide 39
+Các Phương Pháp Chunking Phổ Biến
+Phương pháp Cách hoạt động Ưu điểm Nhược điểm
+Fixed-size token Cắt mỗi N tokens Đơn giản, dễ
+implement
+Cắt giữa câu / ý
+Sentence-based Tách theo câu hoàn chỉnh Giữ nghĩa câu Câu dài / ngắn
+không đều
+Section / heading Tách theo heading (H1, H2) Chunk trọn vẹn
+về ý
+Cần tài liệu có struc-
+ture
+Recursive Thử separator lớn → nhỏ Linh hoạt Phức tạp hơn
+Semantic Gom câu cùng chủ đề Chất lượng cao
+nhất
+Chậm, cần embed-
+ding
+Không có “best” strategy — chọn theo đặc điểm tài liệu
+Giảng viên (VinUni) AICB · Ngày 7 Tuần 1 32 / 60
+
+## Slide 40
+Chunk Overlap — Tại Sao Cần?
+Chunk 1
+Chunk 2
+overlap
+Không overlap: mất
+nghĩa ở biên chunk
+Có overlap: giữ
+liên tục ngữ cảnh
+■ Overlap thường 10–20% kích thước chunk (e.g., 50–100 tokens cho chunk 512
+tokens)
+■ Quá nhiều overlap → duplicate context, tốn storage, nhiễu kết quả
+■ Quá ít overlap → mất nghĩa ở ranh giới giữa hai chunk
+Giảng viên (VinUni) AICB · Ngày 7 Tuần 1 33 / 60
+
+## Slide 41
+Retrieval Khác Gì Memory?
+Retrieval
+■ tìm context liên quan cho câu hỏi hiện
+tại
+■ thường đọc từ knowledge base
+■ trọng tâm là relevance và grounding
+Memory
+■ lưu trạng thái, sở thích, lịch sử chọn
+lọc
+■ có thể từ user profile hoặc interaction
+history
+■ trọng tâm là continuity và
+personalization
+Lưu ý: Nhiều hệ thống dùng cả hai: retrieval để biết domain facts, memory để biết
+user này là ai và đã làm gì trước đó.
+Giảng viên (VinUni) AICB · Ngày 7 Tuần 1 34 / 60
+
+## Slide 42
+Retrieve Rồi Inject — Python Example
+query = "Chinh sach doi tra ap dung trong bao lau?"
+# = ”Chính sách đổi trả áp dụng trong bao lâu?”
+results = collection.query(query_texts=[query], n_results=3)
+context = "\n".join(results["documents"][0])
+prompt = f """Dua tren nguon sau, hay tra loi ngan gon.
+# «Dựa trên nguồn sau, hãy trả lời ngắn gọn.»
+Nguon:
+{context}
+Cau hoi: {query}
+"""
+Giảng viên (VinUni) AICB · Ngày 7 Tuần 1 35 / 60
+
+## Slide 43
+So Sánh: LLM Chay vs RAG-Enhanced
+LLM Chay (No Retrieval)
+■ Chỉ dựa vào training data
+■ Dễ hallucinate với domain-specific
+■ Không cite được nguồn cụ thể
+■ Không cập nhật được data mới
+RAG-Enhanced
+■ Grounded trên dữ liệu thật
+■ Giảm hallucination đáng kể
+■ Trích nguồn cho user verify
+■ Cập nhật bằng re-index, không
+retrain
+RAG thêm latency (retrieve step) và complexity (pipeline), nhưng đổi lại accuracy và
+trustworthiness cao hơn nhiều.
+Giảng viên (VinUni) AICB · Ngày 7 Tuần 1 36 / 60
+
+## Slide 44
+Hosted Retrieval vs Self-managed Retrieval
+Hosted / managed
+File Search / managed retrieval giúp đi
+nhanh, giảm code hạ tầng, phù hợp
+demo và PoC.
+Self-managed
+Dùng Chroma / Faiss / vector DB khi cần
+kiểm soát chunking, metadata, pipeline,
+hoặc cost path chi tiết hơn.
+Ngày 7 chỉ cần hiểu trade-off. Chưa cần sa sâu vào vector DB war hay tối ưu indexing
+nâng cao.
+Giảng viên (VinUni) AICB · Ngày 7 Tuần 1 37 / 60
+
+## Slide 45
+Common Failure Patterns Trong Retrieval
+Pattern Biểu hiện Cách khắc phục
+Chunk quá to Retrieve trúng nhưng an-
+swer nhiễu
+Chunk nhỏ hơn, theo section
+Thiếu metadata Không filter được, lẫn do-
+main
+Thêm category, source, date
+T op-k quá cao Inject quá nhiều context Giảm k, thêm score threshold
+Data cũ / stale Trả lời đúng... nhưng out-
+dated
+Re-index định kỳ, version track-
+ing
+Query mơ hồ Retrieve sai hoàn toàn Query rewriting / expansion
+Debug retrieval bắt đầu từ nhận diện pattern lỗi
+Giảng viên (VinUni) AICB · Ngày 7 Tuần 1 38 / 60
+
+## Slide 46
+Đo Lường Retrieval Quality
+Metrics quan trọng
+■ Precision@k: trong k kết quả, bao nhiêu
+thực sự relevant?
+■ Recall@k: trong tất cả docs relevant, bao
+nhiêu nằm trong top-k?
+■ MRR (Mean Reciprocal Rank): kết quả
+relevant đầu tiên ở vị trí nào?
+■ NDCG: thứ tự rank có tốt không?
+Cách eval đơn giản cho lab
+■ Viết 10–20 test queries với expected docs
+■ Chạy retrieval, so sánh top-k vs expected
+■ Tính Precision@3 và Recall@3
+■ Ghi nhận failure cases: query nào
+retrieve sai?
+Eval retrieval trước khi eval generation
+— nếu retrieve sai thì generate không thể
+đúng.
+Giảng viên (VinUni) AICB · Ngày 7 Tuần 1 39 / 60
+
+## Slide 47
+06
+Hands-on 7
+Mục tiêu của lab là nối được dữ liệu riêng vào hệ thống AI theo
+pipeline tối thiểu nhưng đúng bản chất
+
+## Slide 48
+Lab 7: Vector Store Integration — Overview
+1. Chọn một bộ tài liệu nhỏ: FAQ, SOP , policy, internal docs
+2. Chuẩn hóa text và quyết định metadata tối thiểu
+3. Chunk dữ liệu theo section
+4. Embed và lưu vào vector store
+5. Viết semantic search demo
+6. Inject top-k results vào answer function hoặc mini agent
+Một knowledge base nhỏ nhưng truy đúng và trả lời grounded tốt có giá trị học tập hơn một
+data set lớn nhưng nhiễu.
+Giảng viên (VinUni) AICB · Ngày 7 Tuần 1 40 / 60
+
+## Slide 49
+Lab Step 1: Chọn & Chuẩn Bị Data
+Yêu cầu tối thiểu
+■ 5–15 tài liệu (FAQ, SOP , policy)
+■ Mỗi tài liệu 1–5 trang
+■ T ext đã extract sạch (không còn
+header/footer lặp)
+■ Ghi lại nguồn gốc mỗi file
+Metadata tối thiểu cần ghi
+■ source: tên file gốc
+■ category: domain / loại tài liệu
+■ date: ngày tạo hoặc cập nhật
+■ language: vi / en
+Giảng viên (VinUni) AICB · Ngày 7 Tuần 1 41 / 60
+
+## Slide 50
+Lab Step 2: Chunking Code Example
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+splitter = RecursiveCharacterTextSplitter(
+chunk_size=512,
+chunk_overlap=64,
+separators=["\n\n", "\n", ". ", " "]
+)
+docs = load_documents( "./data/") # your loader
+chunks = []
+for doc in docs:
+parts = splitter.split_text(doc[ "text"])
+for i, part in enumerate(parts):
+chunks.append({
+"id": f "{doc['source']}_chunk_{i}",
+"text": part,
+"metadata": { "source": doc[ "source"],
+"category": doc[ "category"]}
+})
+Giảng viên (VinUni) AICB · Ngày 7 Tuần 1 42 / 60
+
+## Slide 51
+Lab Step 3: Embed & Store
+import chromadb
+from openai import OpenAI
+client_ai = OpenAI()
+client_db = chromadb.Client()
+collection = client_db.create_collection( "lab7_kb")
+for chunk in chunks:
+resp = client_ai.embeddings.create(
+model="text-embedding-3-small",
+input=[chunk["text"]]
+)
+collection.add(
+ids=[chunk["id"]],
+embeddings=[resp.data[0].embedding],
+documents=[chunk["text"]],
+metadatas=[chunk["metadata"]]
+)
+Giảng viên (VinUni) AICB · Ngày 7 Tuần 1 43 / 60
+
+## Slide 52
+Lab Step 4: Semantic Search Demo
+query = "thoi han doi tra san pham"
+# = ”thời hạn đổi trả sản phẩm”
+results = collection.query(
+query_texts=[query],
+n_results=3,
+where={"category": "support"} # metadata filter
+)
+for i, doc in enumerate(results["documents"][0]):
+score = results[ "distances"][0][i]
+print(f"[{i+1}] score={score:.3f}")
+print(f" {doc[:120]}...")
+Giảng viên (VinUni) AICB · Ngày 7 Tuần 1 44 / 60
+
+## Slide 53
+Lab Step 5: Answer Function Có Retrieved Context
+def answer_with_context(query, collection, model= "gpt-4o-mini"):
+results = collection.query(query_texts=[query], n_results=3)
+context = "\n---\n".join(results["documents"][0])
+response = client_ai.chat.completions.create(
+model=model,
+messages=[{
+"role": "user",
+"content": f """Dua tren nguon sau, tra loi ngan gon.
+Neu khong tim thay, noi 'Khong co thong tin'.
+# «Dựa trên nguồn sau, trả lời ngắn gọn. Nếu không tìm thấy, nói ’Không có thông tin’.»
+Nguon:\n{context}\n\nCau hoi: {query}"""
+}]
+)
+return response.choices[0].message.content
+Giảng viên (VinUni) AICB · Ngày 7 Tuần 1 45 / 60
+
+## Slide 54
+Deliverable Và Assessment
+Deliverable
+■ Data inventory 1 trang
+■ Script chunk + embed + index
+■ Query demo với 3 câu hỏi test
+■ Mini answer function có dùng
+retrieved context
+Instructor check
+■ Query có retrieve đúng tài liệu không?
+■ Metadata có giúp lọc tốt hơn không?
+■ Câu trả lời có grounded hơn baseline
+không?
+■ Có biết chỉ ra failure case không?
+Giảng viên (VinUni) AICB · Ngày 7 Tuần 1 46 / 60
+
+## Slide 55
+Checklist Trước Khi Chốt Lab
+□✓ Dữ liệu có owner và source rõ ràng
+□✓ Chunking có lý do, không cắt bừa theo số ký tự
+□✓ Metadata có ít nhất 2 trường hữu ích
+□✓ Có test query semantic, không chỉ test exact keyword
+□ Không chấp nhận câu trả lời nghe hay nhưng không chỉ ra được nguồn
+Giảng viên (VinUni) AICB · Ngày 7 Tuần 1 47 / 60
+
+## Slide 56
+Data Inventory — Mẫu Template
+Tài liệu Loại Owner Freshness PII? Retrieval fit
+FAQ v3.pdf Knowledge Support Monthly Không Cao
+Order status API Operational Eng Real-time Có Thấp (API)
+User profile Contextual Product Per-session Có Inject trực
+tiếp
+Legal contracts Knowledge Legal Quarterly Có Cao (cần
+mask)
+Template gợi ý — điều chỉnh theo domain thực tế
+Giảng viên (VinUni) AICB · Ngày 7 Tuần 1 48 / 60
+
+## Slide 57
+Anti-patterns: Những Gì Không Nên Làm
+1. “Nạp hết vào vector DB rồi tính sau” — Garbage in, garbage out. Clean trước, index sau.
+2. Chunk cố định 500 chars cho mọi loại tài liệu — Mỗi loại doc cần strategy khác nhau.
+3. Không có metadata — Không filter được → retrieve lẫn domain → answer sai.
+4. Không eval retrieval — Chỉ eval generation mà bỏ qua retrieval → debug mù.
+5. Embed raw PII — Vi phạm privacy, rủi ro pháp lý, khó thu hồi.
+6. Top-k = 10 “cho chắc” — Inject quá nhiều context → nhiễu, tốn token, chậm.
+Giảng viên (VinUni) AICB · Ngày 7 Tuần 1 49 / 60
+
+## Slide 58
+Best Practices: Tổng Hợp
+□✓ Clean data trước khi embed — bỏ header/footer lặp, chuẩn hóa encoding
+□✓ Chunk theo structure (heading, section) thay vì fixed-size
+□✓ Thêm metadata ít nhất: source, category, date
+□✓ Overlap 10–20% giữa các chunk liền kề
+□✓ Eval retrieval riêng trước khi eval end-to-end
+□✓ Start small: 10–20 docs, 3–5 test queries, iterate
+□ Không fine-tune embedding model trước khi đã tối ưu hết data + chunking +
+metadata
+Giảng viên (VinUni) AICB · Ngày 7 Tuần 1 50 / 60
+
+## Slide 59
+Distance Metrics: Cosine vs Euclidean vs Dot Product
+Cosine
+Đo góc giữa 2 vector.
+Không phụ thuộc độ dài.
+Mặc định cho hầu hết em-
+bedding models.
+Euclidean (L2)
+Khoảng cách “đường chim
+bay”.
+Phụ thuộc magnitude.
+Phù hợp khi vectors đã nor-
+malize.
+Dot Product
+Nhanh nhất.
+Kết hợp direction + magni-
+tude.
+Tốt khi cần ưu tiên “confi-
+dence”.
+Với OpenAI embeddings (đã normalized), cosine ≈ dot product. Bắt đầu với cosine, chỉ đổi
+khi có lý do cụ thể.
+Giảng viên (VinUni) AICB · Ngày 7 Tuần 1 51 / 60
+
+## Slide 60
+Indexing Algorithms — Approximate Nearest Neighbor
+Vấn đề: Brute-force search O(n) quá chậm khi
+có hàng triệu vectors.
+Giải pháp: ANN algorithms đánh đổi một chút
+accuracy để được tốc độ gấp 100–1000x .
+Các thuật toán phổ biến:
+■ HNSW (Hierarchical Navigable Small
+World) — mặc định ở hầu hết DB
+■ IVF (Inverted File Index) — phân cụm rồi
+search trong cluster
+■ PQ (Product Quantization) — nén vector
+để tiết kiệm RAM
+Ở quy mô lab ( <10K vectors), brute-force
+vẫn đủ nhanh. ANN chỉ cần khi scale lên
+production.
+Lưu ý: Đây là kiến thức nền. Không cần
+implement ANN ở Day 7 — chỉ cần biết
+nó tồn tại.
+Giảng viên (VinUni) AICB · Ngày 7 Tuần 1 52 / 60
+
+## Slide 61
+Bonus: Multi-modal Embeddings
+Không chỉ text
+■ Image embeddings: CLIP , SigLIP
+■ Audio embeddings: CLAP , Whisper
+■ Code embeddings: Voyage Code,
+CodeBERT
+■ Cross-modal: tìm ảnh bằng text query
+và ngược lại
+Ứng dụng thực tế
+■ E-commerce: search sản phẩm
+bằng ảnh
+■ Medical: tìm X-ray tương tự
+■ Code: semantic code search
+■ Creative: text-to-image retrieval
+Day 7 focus vào text embedding. Multi-modal là hướng
+mở rộng sau.
+Giảng viên (VinUni) AICB · Ngày 7 Tuần 1 53 / 60
+
+## Slide 62
+Khi Nào KHÔNG Cần RAG?
+Không nên dùng RAG khi:
+■ Câu hỏi hoàn toàn nằm trong training
+data (general knowledge)
+■ Data đã fit trong context window (đủ nhỏ
+để inject hết)
+■ Cần reasoning / tính toán, không cần
+factual lookup
+■ T ask là creative writing, brainstorming
+Nên dùng RAG khi:
+■ Cần domain-specific, proprietary
+knowledge
+■ Data thay đổi thường xuyên
+■ Cần cite nguồn, trích dẫn cụ thể
+■ Knowledge base quá lớn để fit trong
+context
+■ Cần kiểm soát access (ACL per doc)
+Lưu ý: RAG không phải silver bullet. Nếu bài toán không cần external knowledge, RAG chỉ
+thêm latency và complexity.
+Giảng viên (VinUni) AICB · Ngày 7 Tuần 1 54 / 60
+
+## Slide 63
+Ví Dụ End-to-End: Customer Support Bot
+User
+Query
+Intent
+Router
+Retrieve
+(Vector DB)
+Rerank
++ Filter
+Generate
+(LLM)
+Response
++ Sources
+Knowledge data: FAQ đổi trả, chính sách bảo
+hành, hướng dẫn sử dụng
+Operational data: trạng thái đơn hàng (qua
+API)
+Contextual data: lịch sử chat, user tier
+(VIP/regular)
+Chunking: theo section heading
+Metadata: category, language, version
+Eval: 20 test queries, Precision@3 > 0.8
+Fallback: “Tôi không tìm thấy thông tin, xin
+chuyển cho nhân viên.”
+Giảng viên (VinUni) AICB · Ngày 7 Tuần 1 55 / 60
+
+## Slide 64
+Quay Lại Câu Hỏi Đầu Bài
+“Agent trả lời sai vì model yếu, hay vì nó không có đúng dữ liệu để
+suy luận?”
+■ Hầu hết trường hợp: vì data, không phải vì model.
+■ Data bẩn + chunk sai + không metadata → model mạnh nhất cũng hallucinate.
+■ Pipeline tốt (clean → chunk → embed → store → retrieve → inject) giải quyết 80%
+vấn đề.
+Đầu tư vào data quality và retrieval pipeline trước khi nghĩ đến đổi model.
+Giảng viên (VinUni) AICB · Ngày 7 Tuần 1 56 / 60
+
+## Slide 65
+07
+Key Takeaways
+Day 07 đặt nền cho RAG và mọi hệ thống AI dùng tri thức riêng
+
+## Slide 66
+4 Ý Cần Nhớ Sau Buổi Học
+1. Data quality thường quan trọng hơn đổi sang model đắt hơn.
+2. Embedding là lớp dịch ngôn ngữ sang không gian có thể so sánh nghĩa.
+3. Vector store là bộ nhớ dài hạn có thể tìm kiếm bằng ngữ nghĩa và metadata.
+4. Retrieval pipeline là cầu nối từ dữ liệu riêng tới câu trả lời grounded của agent.
+Giảng viên (VinUni) AICB · Ngày 7 Tuần 1 57 / 60
+
+## Slide 67
+Mental Model: Từ Data Đến Grounded Answer
+Clean
+Data
+Smart
+Chunks
+Rich
+Embeddings
+Indexed
+Store
+Grounded
+Answer
+quality structure meaning
+Lưu ý: Mỗi bước yếu sẽ kéo toàn bộ pipeline xuống. Hãy đầu tư đều vào từng bước
+thay vì chỉ tối ưu phần cuối.
+Giảng viên (VinUni) AICB · Ngày 7 Tuần 1 58 / 60
+
+## Slide 68
+Tài Liệu Tham Khảo
+1. Stanford HAI. The 2025 AI Index Report .
+https://hai.stanford.edu/ai-index/2025-ai-index-report
+2. OpenAI Docs. Embeddings Guide. https://platform.openai.com/docs/guides/embeddings
+3. OpenAI Docs. Retrieval Guide. https://platform.openai.com/docs/guides/retrieval
+4. OpenAI Docs. File Search Guide . https://platform.openai.com/docs/guides/tools-file-search
+5. Hugging Face. MTEB: Massive Text Embedding Benchmark . https://huggingface.co/blog/mteb
+6. Chroma Documentation. Getting Started / Collections / Query . https://docs.trychroma.com/
+7. Karpukhin et al. Dense Passage Retrieval for Open-Domain QA . arXiv:2004.04906
+8. Malkov & Yashunin. Efficient and Robust ANN using HNSW Graphs . arXiv:1603.09320
+Giảng viên (VinUni) AICB · Ngày 7 Tuần 1 59 / 60
+
+## Slide 69
+Tiếp Theo & Bài Tập
+Bài tập sau buổi
+■ Rà lại knowledge base của nhóm và bỏ 20% nội
+dung nhiễu nhất
+■ Viết 5 test query để đo retrieval quality
+■ Chỉ ra 2 failure cases do chunking hoặc
+metadata
+■ Thử thay đổi chunk_size và overlap, ghi nhận sự
+khác biệt
+Preview Day 08
+Ngày 8 đi tiếp sang RAG
+pipeline: indexing, retrieval,
+generation, evaluation.
+Giảng viên (VinUni) AICB · Ngày 7 Tuần 1 60 / 60
+
+## Slide 70
+?
+HÃY SUY NGHĨ...
+“Cảm Ơn! — Q&A”
+Giữ câu hỏi này trong đầu khi học bài hôm nay
